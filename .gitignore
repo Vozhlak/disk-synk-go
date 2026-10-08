@@ -42,3 +42,6 @@ temp/
 # Go workspace files
 go.work
 go.work.sum
+
+#configs
+config.yaml
