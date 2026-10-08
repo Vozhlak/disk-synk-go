@@ -1,0 +1,44 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output
+/bin/
+/build/
+/dist/
+
+# Test and profiling artifacts
+*.test
+*.out
+*.prof
+coverage.txt
+coverage.html
+
+# Dependencies (use only if you do NOT commit vendor/)
+vendor/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+
+# macOS
+.DS_Store
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go workspace files
+go.work
+go.work.sum
