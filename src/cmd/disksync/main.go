@@ -2,16 +2,33 @@ package main
 
 import (
 	"disk-sync/src/internal/config"
-	"fmt"
+	"disk-sync/src/internal/lib/logger"
+	"log/slog"
 	"os"
 )
 
+const configPath = "config.yaml"
+
 func main() {
-	cfg, err := config.Load("config.yaml")
+	cfg, err := config.Load(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load configuration: %v\n", err)
+		log := logger.New("local")
+
+		log.Error(
+			"failed to load configuration",
+			slog.String("path", configPath),
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
 		return
 	}
 
-	fmt.Printf("Configuration loaded successfully, env: %s\n", cfg.Env)
+	log := logger.New(cfg.Env)
+
+	log.Info(
+		"configuration loaded successfully",
+		slog.String("path", configPath),
+		slog.String("env", cfg.Env),
+	)
 }
