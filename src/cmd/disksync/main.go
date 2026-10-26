@@ -23,7 +23,6 @@ func main() {
 		)
 
 		os.Exit(1)
-		return
 	}
 
 	log := logger.New(cfg.Env)
@@ -64,6 +63,28 @@ func main() {
 	}
 
 	log.Info("Google Drive access check completed successfully")
+
+	files, err := driveClient.ListFiles(ctx)
+	if err != nil {
+		log.Error(
+			"failed to list files",
+			slog.Any("error", err),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info(
+		"found Google Drive files",
+		slog.Int("count", len(files)),
+	)
+
+	for _, file := range files {
+		log.Info(
+			" - File",
+			slog.String("name", file.Name),
+		)
+	}
 }
 
 func checkDriveAccess(ctx context.Context, client *gdrive.Client) error {

@@ -41,7 +41,7 @@ func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client
 		ClientSecret: clientSecret,
 		RedirectURL:  "http://127.0.0.1:8080/callback",
 		Endpoint:     google.Endpoint,
-		Scopes:       []string{drive.DriveFileScope},
+		Scopes:       []string{drive.DriveMetadataReadonlyScope},
 	}
 
 	token, err := loadOrAuthorizeToken(ctx, cfg, tokenPath)
@@ -233,4 +233,17 @@ func (c *Client) CheckAccess(ctx context.Context) error {
 	fmt.Printf("Authenticated as: %s\n", about.User.EmailAddress)
 
 	return nil
+}
+
+func (c *Client) ListFiles(ctx context.Context) ([]*drive.File, error) {
+	result, err := c.service.Files.List().
+		Context(ctx).
+		Q("trashed = false").
+		Fields("files(id, name, mimeType)").
+		Do()
+	if err != nil {
+		return nil, fmt.Errorf("list Google Drive files: %w", err)
+	}
+
+	return result.Files, nil
 }
