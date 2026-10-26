@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"disk-sync/src/internal/config"
+	"disk-sync/src/internal/gdrive"
 	"disk-sync/src/internal/lib/logger"
 	"log/slog"
 	"os"
@@ -31,4 +33,39 @@ func main() {
 		slog.String("path", configPath),
 		slog.String("env", cfg.Env),
 	)
+
+	ctx := context.Background()
+
+	driveClient, err := gdrive.New(
+		ctx,
+		cfg.GoogleDrive.ClientID,
+		cfg.GoogleDrive.ClientSecret,
+		cfg.GoogleDrive.TokenPath,
+	)
+	if err != nil {
+		log.Error(
+			"failed to authenticate with Google Drive",
+			slog.String("token_path", cfg.GoogleDrive.TokenPath),
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info("Google Drive client initialized")
+
+	if err = checkDriveAccess(ctx, driveClient); err != nil {
+		log.Error(
+			"Google Drive access check failed",
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info("Google Drive access check completed successfully")
+}
+
+func checkDriveAccess(ctx context.Context, client *gdrive.Client) error {
+	return client.CheckAccess(ctx)
 }

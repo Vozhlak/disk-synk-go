@@ -15,8 +15,15 @@ var (
 	ErrEnvRequired = errors.New("env is required")
 )
 
+type GoogleDrive struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	TokenPath    string `yaml:"token_path"`
+}
+
 type Config struct {
-	Env string `yaml:"env"`
+	Env         string      `yaml:"env"`
+	GoogleDrive GoogleDrive `yaml:"google_drive"`
 }
 
 func Load(path string) (*Config, error) {
