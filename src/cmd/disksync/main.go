@@ -5,6 +5,7 @@ import (
 	"disk-sync/src/internal/config"
 	"disk-sync/src/internal/gdrive"
 	"disk-sync/src/internal/lib/logger"
+	"disk-sync/src/internal/storage"
 	"disk-sync/src/internal/ydisk"
 	"log/slog"
 	"os"
@@ -65,28 +66,6 @@ func main() {
 
 	log.Info("Google Drive access check completed successfully")
 
-	files, err := driveClient.ListFiles(ctx)
-	if err != nil {
-		log.Error(
-			"failed to list files",
-			slog.Any("error", err),
-		)
-
-		os.Exit(1)
-	}
-
-	log.Info(
-		"found Google Drive files",
-		slog.Int("count", len(files)),
-	)
-
-	for _, file := range files {
-		log.Info(
-			" - File",
-			slog.String("name", file.Name),
-		)
-	}
-
 	ydiskClient, err := ydisk.New(
 		ctx,
 		cfg.YandexDisk.ClientID,
@@ -116,26 +95,39 @@ func main() {
 
 	log.Info("successfully authenticated with Yandex Disk")
 
-	ydiskFiles, err := ydiskClient.ListFiles(ctx)
-	if err != nil {
-		log.Error(
-			"failed to list yandex disk files",
-			slog.Any("error", err),
-		)
-
-		return
+	storages := map[string]storage.Storage{
+		"Google Drive": driveClient,
+		"Yandex Disk":  ydiskClient,
 	}
 
-	log.Info(
-		"found Yandex Disk files",
-		slog.Int("count", len(ydiskFiles)),
-	)
+	listAllFiles(ctx, log, storages)
+}
 
-	for _, file := range ydiskFiles {
-		log.Info(
-			" - File",
-			slog.String("name", file.Name),
+func listAllFiles(ctx context.Context, log *slog.Logger, storages map[string]storage.Storage) {
+	for name, client := range storages {
+		files, err := client.ListFiles(ctx)
+		if err != nil {
+			log.Error(
+				"failed to list files",
+				slog.String("storage", name),
+				slog.Any("error", err),
+			)
+
+			os.Exit(1)
+		}
+
+		log.Info("found files",
+			slog.String("storage", name),
+			slog.Int("count", len(files)),
 		)
+
+		for _, file := range files {
+			log.Info(
+				" - File",
+				slog.String("name", file.Name),
+				slog.String("type", file.Type),
+			)
+		}
 	}
 }
 

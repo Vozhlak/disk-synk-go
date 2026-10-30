@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"disk-sync/src/internal/storage"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -206,7 +207,7 @@ func (c *Client) CheckAccess(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) ListFiles(ctx context.Context) ([]ydiskFile, error) {
+func (c *Client) ListFiles(ctx context.Context) ([]storage.File, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, diskResourceURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create Yandex Disk request: %w", err)
@@ -235,5 +236,14 @@ func (c *Client) ListFiles(ctx context.Context) ([]ydiskFile, error) {
 		return nil, fmt.Errorf("decode Yandex Disk response: %w", err)
 	}
 
-	return result.Embedded.Items, nil
+	var files []storage.File
+
+	for _, file := range result.Embedded.Items {
+		files = append(files, storage.File{
+			Name: file.Name,
+			Type: file.Type,
+		})
+	}
+
+	return files, nil
 }

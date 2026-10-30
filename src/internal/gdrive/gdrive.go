@@ -3,6 +3,7 @@ package gdrive
 import (
 	"context"
 	"crypto/rand"
+	"disk-sync/src/internal/storage"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -235,7 +236,7 @@ func (c *Client) CheckAccess(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) ListFiles(ctx context.Context) ([]*drive.File, error) {
+func (c *Client) ListFiles(ctx context.Context) ([]storage.File, error) {
 	result, err := c.service.Files.List().
 		Context(ctx).
 		Q("trashed = false").
@@ -245,5 +246,22 @@ func (c *Client) ListFiles(ctx context.Context) ([]*drive.File, error) {
 		return nil, fmt.Errorf("list Google Drive files: %w", err)
 	}
 
-	return result.Files, nil
+	files := make([]storage.File, 0, len(result.Files))
+
+	for _, file := range result.Files {
+		files = append(files, storage.File{
+			Name: file.Name,
+			Type: googleFileType(file.MimeType),
+		})
+	}
+
+	return files, nil
+}
+
+func googleFileType(mimeType string) string {
+	if mimeType == "application/vnd.google-apps.folder" {
+		return "dir"
+	}
+
+	return "file"
 }
