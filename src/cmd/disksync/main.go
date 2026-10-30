@@ -115,6 +115,28 @@ func main() {
 	}
 
 	log.Info("successfully authenticated with Yandex Disk")
+
+	ydiskFiles, err := ydiskClient.ListFiles(ctx)
+	if err != nil {
+		log.Error(
+			"failed to list yandex disk files",
+			slog.Any("error", err),
+		)
+
+		return
+	}
+
+	log.Info(
+		"found Yandex Disk files",
+		slog.Int("count", len(ydiskFiles)),
+	)
+
+	for _, file := range ydiskFiles {
+		log.Info(
+			" - File",
+			slog.String("name", file.Name),
+		)
+	}
 }
 
 func checkYandexDiskAccess(ctx context.Context, client *ydisk.Client) error {

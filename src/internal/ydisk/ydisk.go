@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	authURL     = "https://oauth.yandex.ru/authorize"
-	tokenURL    = "https://oauth.yandex.ru/token"
-	diskInfoURL = "https://cloud-api.yandex.net/v1/disk/"
+	authURL         = "https://oauth.yandex.ru/authorize"
+	tokenURL        = "https://oauth.yandex.ru/token"
+	diskInfoURL     = "https://cloud-api.yandex.net/v1/disk/"
+	diskResourceURL = "https://cloud-api.yandex.net/v1/disk/resources?path=/"
 
 	verificationCodeURL = "https://oauth.yandex.ru/verification_code"
 
@@ -29,6 +30,20 @@ const (
 
 type Client struct {
 	httpClient *http.Client
+	token      string
+}
+
+type ydiskFile struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type ydiskEmbedded struct {
+	Items []ydiskFile `json:"items"`
+}
+
+type ydiskResourcesResponse struct {
+	Embedded ydiskEmbedded `json:"_embedded"`
 }
 
 func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client, error) {
@@ -62,6 +77,7 @@ func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client
 
 	return &Client{
 		httpClient: cfg.Client(ctx, token),
+		token:      token.AccessToken,
 	}, nil
 }
 
@@ -188,4 +204,36 @@ func (c *Client) CheckAccess(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (c *Client) ListFiles(ctx context.Context) ([]ydiskFile, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, diskResourceURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Yandex Disk request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "OAuth "+c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("list Yandex Disk files: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+
+		return nil, fmt.Errorf(
+			"list Yandex Disk files: unexpected status %d: %s",
+			resp.StatusCode,
+			strings.TrimSpace(string(body)),
+		)
+	}
+
+	var result ydiskResourcesResponse
+	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode Yandex Disk response: %w", err)
+	}
+
+	return result.Embedded.Items, nil
 }
