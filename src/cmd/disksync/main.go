@@ -5,6 +5,7 @@ import (
 	"disk-sync/src/internal/config"
 	"disk-sync/src/internal/gdrive"
 	"disk-sync/src/internal/lib/logger"
+	"disk-sync/src/internal/ydisk"
 	"log/slog"
 	"os"
 )
@@ -85,6 +86,39 @@ func main() {
 			slog.String("name", file.Name),
 		)
 	}
+
+	ydiskClient, err := ydisk.New(
+		ctx,
+		cfg.YandexDisk.ClientID,
+		cfg.YandexDisk.ClientSecret,
+		cfg.YandexDisk.TokenPath,
+	)
+	if err != nil {
+		log.Error(
+			"failed to authenticate with Yandex Disk",
+			slog.String("token_path", cfg.YandexDisk.TokenPath),
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info("Yandex Disk client initialized")
+
+	if err = checkYandexDiskAccess(ctx, ydiskClient); err != nil {
+		log.Error(
+			"Yandex Disk access check failed",
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info("successfully authenticated with Yandex Disk")
+}
+
+func checkYandexDiskAccess(ctx context.Context, client *ydisk.Client) error {
+	return client.CheckAccess(ctx)
 }
 
 func checkDriveAccess(ctx context.Context, client *gdrive.Client) error {

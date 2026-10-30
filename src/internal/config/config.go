@@ -21,9 +21,16 @@ type GoogleDrive struct {
 	TokenPath    string `yaml:"token_path"`
 }
 
+type YandexDisk struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	TokenPath    string `yaml:"token_path"`
+}
+
 type Config struct {
 	Env         string      `yaml:"env"`
 	GoogleDrive GoogleDrive `yaml:"google_drive"`
+	YandexDisk  YandexDisk  `yaml:"yandex_disk"`
 }
 
 func Load(path string) (*Config, error) {
