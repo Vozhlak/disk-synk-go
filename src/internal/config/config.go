@@ -31,6 +31,7 @@ type Config struct {
 	Env         string      `yaml:"env"`
 	GoogleDrive GoogleDrive `yaml:"google_drive"`
 	YandexDisk  YandexDisk  `yaml:"yandex_disk"`
+	LocalDir    string      `yaml:"local_dir"`
 }
 
 func Load(path string) (*Config, error) {
@@ -59,10 +60,15 @@ func Load(path string) (*Config, error) {
 func (c *Config) Validate() error {
 	switch c.Env {
 	case "local", "dev", "prod":
-		return nil
 	case "":
 		return ErrEnvRequired
 	default:
 		return fmt.Errorf("%w: %q, allowed: local, dev, prod", ErrInvalidEnv, c.Env)
 	}
+
+	if strings.TrimSpace(c.LocalDir) == "" {
+		return errors.New("local_dir is required")
+	}
+
+	return nil
 }

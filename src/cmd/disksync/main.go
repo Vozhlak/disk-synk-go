@@ -5,6 +5,7 @@ import (
 	"disk-sync/src/internal/config"
 	"disk-sync/src/internal/gdrive"
 	"disk-sync/src/internal/lib/logger"
+	"disk-sync/src/internal/localfs"
 	"disk-sync/src/internal/storage"
 	"disk-sync/src/internal/ydisk"
 	"log/slog"
@@ -95,9 +96,12 @@ func main() {
 
 	log.Info("successfully authenticated with Yandex Disk")
 
+	localFsClient := localfs.New(cfg.LocalDir)
+
 	storages := map[string]storage.Storage{
-		"Google Drive": driveClient,
-		"Yandex Disk":  ydiskClient,
+		"Google Drive":     driveClient,
+		"Yandex Disk":      ydiskClient,
+		"Local Filesystem": localFsClient,
 	}
 
 	listAllFiles(ctx, log, storages)
