@@ -43,7 +43,7 @@ func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client
 		ClientSecret: clientSecret,
 		RedirectURL:  "http://127.0.0.1:8080/callback",
 		Endpoint:     google.Endpoint,
-		Scopes:       []string{drive.DriveMetadataReadonlyScope},
+		Scopes:       []string{drive.DriveScope},
 	}
 
 	token, err := loadOrAuthorizeToken(ctx, cfg, tokenPath)
@@ -268,6 +268,14 @@ func googleFileType(mimeType string) string {
 }
 
 func (c *Client) UploadFile(ctx context.Context, file storage.File, content io.Reader) error {
-	//TODO implement me
-	panic("implement me")
+	metadata := &drive.File{
+		Name: file.Name,
+	}
+
+	_, err := c.service.Files.Create(metadata).Context(ctx).Media(content).Do()
+	if err != nil {
+		return fmt.Errorf("upload file %q to Google Drive: %w", file.Name, err)
+	}
+
+	return nil
 }

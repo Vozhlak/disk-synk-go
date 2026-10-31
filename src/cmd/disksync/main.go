@@ -11,6 +11,7 @@ import (
 	"disk-sync/src/internal/ydisk"
 	"log/slog"
 	"os"
+	"path/filepath"
 )
 
 const configPath = "config.yaml"
@@ -68,47 +69,46 @@ func main() {
 
 	log.Info("Google Drive access check completed successfully")
 
-	ydiskClient, err := ydisk.New(
-		ctx,
-		cfg.YandexDisk.ClientID,
-		cfg.YandexDisk.ClientSecret,
-		cfg.YandexDisk.TokenPath,
-	)
-	if err != nil {
-		log.Error(
-			"failed to authenticate with Yandex Disk",
-			slog.String("token_path", cfg.YandexDisk.TokenPath),
-			slog.String("error", err.Error()),
-		)
+	//ydiskClient, err := ydisk.New(
+	//	ctx,
+	//	cfg.YandexDisk.ClientID,
+	//	cfg.YandexDisk.ClientSecret,
+	//	cfg.YandexDisk.TokenPath,
+	//)
+	//if err != nil {
+	//	log.Error(
+	//		"failed to authenticate with Yandex Disk",
+	//		slog.String("token_path", cfg.YandexDisk.TokenPath),
+	//		slog.String("error", err.Error()),
+	//	)
+	//
+	//	os.Exit(1)
+	//}
 
-		os.Exit(1)
-	}
-
-	log.Info("Yandex Disk client initialized")
-
-	if err = checkYandexDiskAccess(ctx, ydiskClient); err != nil {
-		log.Error(
-			"Yandex Disk access check failed",
-			slog.String("error", err.Error()),
-		)
-
-		os.Exit(1)
-	}
-
-	log.Info("successfully authenticated with Yandex Disk")
+	//log.Info("Yandex Disk client initialized")
+	//
+	//if err = checkYandexDiskAccess(ctx, ydiskClient); err != nil {
+	//	log.Error(
+	//		"Yandex Disk access check failed",
+	//		slog.String("error", err.Error()),
+	//	)
+	//
+	//	os.Exit(1)
+	//}
+	//
+	//log.Info("successfully authenticated with Yandex Disk")
 
 	localFsClient := localfs.New(cfg.LocalDir)
 
 	storages := map[string]storage.Storage{
 		"Google Drive":     driveClient,
-		"Yandex Disk":      ydiskClient,
 		"Local Filesystem": localFsClient,
 	}
 
-	listAllFilesToSync(ctx, log, storages)
+	syncFiles(ctx, log, cfg, storages)
 }
 
-func listAllFilesToSync(ctx context.Context, log *slog.Logger, storages map[string]storage.Storage) {
+func syncFiles(ctx context.Context, log *slog.Logger, cgf *config.Config, storages map[string]storage.Storage) {
 	localFiles, err := storages["Local Filesystem"].ListFiles(ctx)
 	if err != nil {
 		log.Error(
@@ -155,38 +155,66 @@ func listAllFilesToSync(ctx context.Context, log *slog.Logger, storages map[stri
 		)
 
 		for _, file := range filesToSync {
-			log.Info(
-				" - File to sync",
-				slog.String("storage", name),
-				slog.String("name", file.Name),
-			)
-		}
-	}
-}
+			if file.Type == "dir" {
+				log.Info(
+					"skipping directory",
+					slog.String("storage", name),
+					slog.String("file_name", file.Name),
+				)
 
-func listAllFiles(ctx context.Context, log *slog.Logger, storages map[string]storage.Storage) {
-	for name, client := range storages {
-		files, err := client.ListFiles(ctx)
-		if err != nil {
-			log.Error(
-				"failed to list files",
+				continue
+			}
+
+			log.Info("uploading files...",
 				slog.String("storage", name),
-				slog.Any("error", err),
+				slog.String("file_name", file.Name),
 			)
 
-			os.Exit(1)
-		}
+			localPath := filepath.Join(cgf.LocalDir, file.Name)
 
-		log.Info("found files",
-			slog.String("storage", name),
-			slog.Int("count", len(files)),
-		)
+			localFile, err := os.Open(localPath)
+			if err != nil {
+				log.Error(
+					"failed to open local file",
+					slog.String("storage", name),
+					slog.String("file_name", file.Name),
+					slog.String("path", localPath),
+					slog.Any("error", err),
+				)
 
-		for _, file := range files {
+				os.Exit(1)
+			}
+
+			err = client.UploadFile(ctx, file, localFile)
+
+			closeErr := localFile.Close()
+
+			if err != nil {
+				log.Error(
+					"failed to upload file",
+					slog.String("storage", name),
+					slog.String("file_name", file.Name),
+					slog.Any("error", err),
+				)
+
+				os.Exit(1)
+			}
+
+			if closeErr != nil {
+				log.Error(
+					"failed to close local file",
+					slog.String("storage", name),
+					slog.String("file_name", file.Name),
+					slog.Any("error", closeErr),
+				)
+
+				os.Exit(1)
+			}
+
 			log.Info(
-				" - File",
-				slog.String("name", file.Name),
-				slog.String("type", file.Type),
+				"file uploaded successfully",
+				slog.String("storage", name),
+				slog.String("file_name", file.Name),
 			)
 		}
 	}
