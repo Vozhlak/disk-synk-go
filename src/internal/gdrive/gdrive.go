@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -264,4 +265,9 @@ func googleFileType(mimeType string) string {
 	}
 
 	return "file"
+}
+
+func (c *Client) UploadFile(ctx context.Context, file storage.File, content io.Reader) error {
+	//TODO implement me
+	panic("implement me")
 }

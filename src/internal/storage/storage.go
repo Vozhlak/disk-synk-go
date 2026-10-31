@@ -1,6 +1,9 @@
 package storage
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type File struct {
 	Name string
@@ -9,4 +12,5 @@ type File struct {
 
 type Storage interface {
 	ListFiles(ctx context.Context) ([]File, error)
+	UploadFile(ctx context.Context, file File, content io.Reader) error
 }

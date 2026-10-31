@@ -4,6 +4,7 @@ import (
 	"context"
 	"disk-sync/src/internal/storage"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -46,4 +47,9 @@ func (c *Client) ListFiles(ctx context.Context) ([]storage.File, error) {
 	}
 
 	return files, nil
+}
+
+func (c *Client) UploadFile(ctx context.Context, file storage.File, content io.Reader) error {
+	//TODO implement me
+	panic("implement me")
 }

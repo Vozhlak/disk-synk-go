@@ -247,3 +247,8 @@ func (c *Client) ListFiles(ctx context.Context) ([]storage.File, error) {
 
 	return files, nil
 }
+
+func (c *Client) UploadFile(ctx context.Context, file storage.File, content io.Reader) error {
+	//TODO implement me
+	panic("implement me")
+}
