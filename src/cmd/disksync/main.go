@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"disk-sync/src/internal/config"
+	"disk-sync/src/internal/differ"
 	"disk-sync/src/internal/gdrive"
 	"disk-sync/src/internal/lib/logger"
 	"disk-sync/src/internal/localfs"
@@ -104,7 +105,63 @@ func main() {
 		"Local Filesystem": localFsClient,
 	}
 
-	listAllFiles(ctx, log, storages)
+	listAllFilesToSync(ctx, log, storages)
+}
+
+func listAllFilesToSync(ctx context.Context, log *slog.Logger, storages map[string]storage.Storage) {
+	localFiles, err := storages["Local Filesystem"].ListFiles(ctx)
+	if err != nil {
+		log.Error(
+			"failed to list local files",
+			slog.String("storage", "Local Filesystem"),
+			slog.Any("error", err),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info(
+		"found local files",
+		slog.Int("count", len(localFiles)),
+	)
+
+	for name, client := range storages {
+		if name == "Local Filesystem" {
+			continue
+		}
+
+		log.Info(
+			"calculating diff...",
+			slog.String("storage", name),
+		)
+
+		cloudFiles, err := client.ListFiles(ctx)
+		if err != nil {
+			log.Error(
+				"failed to list files",
+				slog.String("storage", name),
+				slog.Any("error", err),
+			)
+
+			os.Exit(1)
+		}
+
+		filesToSync := differ.Diff(localFiles, cloudFiles)
+
+		log.Info(
+			"diff calculated",
+			slog.String("storage", name),
+			slog.Int("files_to_sync", len(filesToSync)),
+		)
+
+		for _, file := range filesToSync {
+			log.Info(
+				" - File to sync",
+				slog.String("storage", name),
+				slog.String("name", file.Name),
+			)
+		}
+	}
 }
 
 func listAllFiles(ctx context.Context, log *slog.Logger, storages map[string]storage.Storage) {
