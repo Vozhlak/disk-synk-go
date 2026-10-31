@@ -9,6 +9,7 @@ import (
 	"disk-sync/src/internal/localfs"
 	"disk-sync/src/internal/storage"
 	"disk-sync/src/internal/ydisk"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -108,7 +109,7 @@ func main() {
 	syncFiles(ctx, log, cfg, storages)
 }
 
-func syncFiles(ctx context.Context, log *slog.Logger, cgf *config.Config, storages map[string]storage.Storage) {
+func syncFiles(ctx context.Context, log *slog.Logger, cfg *config.Config, storages map[string]storage.Storage) {
 	localFiles, err := storages["Local Filesystem"].ListFiles(ctx)
 	if err != nil {
 		log.Error(
@@ -165,59 +166,61 @@ func syncFiles(ctx context.Context, log *slog.Logger, cgf *config.Config, storag
 				continue
 			}
 
-			log.Info("uploading files...",
-				slog.String("storage", name),
-				slog.String("file_name", file.Name),
-			)
-
-			localPath := filepath.Join(cgf.LocalDir, file.Name)
-
-			localFile, err := os.Open(localPath)
-			if err != nil {
-				log.Error(
-					"failed to open local file",
-					slog.String("storage", name),
-					slog.String("file_name", file.Name),
-					slog.String("path", localPath),
-					slog.Any("error", err),
-				)
-
+			if err = uploadFile(ctx, log, name, cfg.LocalDir, client, file); err != nil {
 				os.Exit(1)
 			}
-
-			err = client.UploadFile(ctx, file, localFile)
-
-			closeErr := localFile.Close()
-
-			if err != nil {
-				log.Error(
-					"failed to upload file",
-					slog.String("storage", name),
-					slog.String("file_name", file.Name),
-					slog.Any("error", err),
-				)
-
-				os.Exit(1)
-			}
-
-			if closeErr != nil {
-				log.Error(
-					"failed to close local file",
-					slog.String("storage", name),
-					slog.String("file_name", file.Name),
-					slog.Any("error", closeErr),
-				)
-
-				os.Exit(1)
-			}
-
-			log.Info(
-				"file uploaded successfully",
-				slog.String("storage", name),
-				slog.String("file_name", file.Name),
-			)
 		}
 	}
+}
+
+func uploadFile(
+	ctx context.Context,
+	log *slog.Logger,
+	storageName string,
+	localDir string,
+	client storage.Storage,
+	file storage.File,
+) error {
+	log.Info(
+		"uploading file...",
+		slog.String("storage", storageName),
+		slog.String("file_name", file.Name),
+	)
+
+	localPath := filepath.Join(localDir, file.Name)
+
+	localFile, err := os.Open(localPath)
+	if err != nil {
+		log.Error(
+			"failed to open local file",
+			slog.String("storage", storageName),
+			slog.String("file_name", file.Name),
+			slog.String("path", localPath),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("open local file: %w", err)
+	}
+	defer localFile.Close()
+
+	if err = client.UploadFile(ctx, file, localFile); err != nil {
+		log.Error(
+			"failed to upload file",
+			slog.String("storage", storageName),
+			slog.String("file_name", file.Name),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("upload file: %w", err)
+	}
+
+	log.Info(
+		"file uploaded successfully",
+		slog.String("storage", storageName),
+		slog.String("file_name", file.Name),
+	)
+
+	return nil
 }
 
 func checkYandexDiskAccess(ctx context.Context, client *ydisk.Client) error {
