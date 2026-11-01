@@ -70,39 +70,40 @@ func main() {
 
 	log.Info("Google Drive access check completed successfully")
 
-	//ydiskClient, err := ydisk.New(
-	//	ctx,
-	//	cfg.YandexDisk.ClientID,
-	//	cfg.YandexDisk.ClientSecret,
-	//	cfg.YandexDisk.TokenPath,
-	//)
-	//if err != nil {
-	//	log.Error(
-	//		"failed to authenticate with Yandex Disk",
-	//		slog.String("token_path", cfg.YandexDisk.TokenPath),
-	//		slog.String("error", err.Error()),
-	//	)
-	//
-	//	os.Exit(1)
-	//}
+	ydiskClient, err := ydisk.New(
+		ctx,
+		cfg.YandexDisk.ClientID,
+		cfg.YandexDisk.ClientSecret,
+		cfg.YandexDisk.TokenPath,
+	)
+	if err != nil {
+		log.Error(
+			"failed to authenticate with Yandex Disk",
+			slog.String("token_path", cfg.YandexDisk.TokenPath),
+			slog.String("error", err.Error()),
+		)
 
-	//log.Info("Yandex Disk client initialized")
-	//
-	//if err = checkYandexDiskAccess(ctx, ydiskClient); err != nil {
-	//	log.Error(
-	//		"Yandex Disk access check failed",
-	//		slog.String("error", err.Error()),
-	//	)
-	//
-	//	os.Exit(1)
-	//}
-	//
-	//log.Info("successfully authenticated with Yandex Disk")
+		os.Exit(1)
+	}
+
+	log.Info("Yandex Disk client initialized")
+
+	if err = checkYandexDiskAccess(ctx, ydiskClient); err != nil {
+		log.Error(
+			"Yandex Disk access check failed",
+			slog.String("error", err.Error()),
+		)
+
+		os.Exit(1)
+	}
+
+	log.Info("successfully authenticated with Yandex Disk")
 
 	localFsClient := localfs.New(cfg.LocalDir)
 
 	storages := map[string]storage.Storage{
 		"Google Drive":     driveClient,
+		"Yandex Disk":      ydiskClient,
 		"Local Filesystem": localFsClient,
 	}
 

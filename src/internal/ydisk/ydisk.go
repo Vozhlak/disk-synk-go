@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -23,10 +25,12 @@ const (
 	tokenURL        = "https://oauth.yandex.ru/token"
 	diskInfoURL     = "https://cloud-api.yandex.net/v1/disk/"
 	diskResourceURL = "https://cloud-api.yandex.net/v1/disk/resources?path=/"
+	uploadLinkURL   = "https://cloud-api.yandex.net/v1/disk/resources/upload"
 
 	verificationCodeURL = "https://oauth.yandex.ru/verification_code"
 
-	scopeDiskRead = "cloud_api:disk.read"
+	scopeDiskRead  = "cloud_api:disk.read"
+	scopeDiskWrite = "cloud_api:disk.write"
 )
 
 type Client struct {
@@ -45,6 +49,13 @@ type ydiskEmbedded struct {
 
 type ydiskResourcesResponse struct {
 	Embedded ydiskEmbedded `json:"_embedded"`
+}
+
+type uploadLinkResponse struct {
+	Href        string `json:"href"`
+	Method      string `json:"method"`
+	Templated   bool   `json:"templated"`
+	OperationID string `json:"operation_id"`
 }
 
 func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client, error) {
@@ -68,7 +79,7 @@ func New(ctx context.Context, clientID, clientSecret, tokenPath string) (*Client
 			AuthURL:  authURL,
 			TokenURL: tokenURL,
 		},
-		Scopes: []string{scopeDiskRead},
+		Scopes: []string{scopeDiskRead, scopeDiskWrite},
 	}
 
 	token, err := loadOrAuthorizeToken(ctx, cfg, tokenPath)
@@ -249,6 +260,91 @@ func (c *Client) ListFiles(ctx context.Context) ([]storage.File, error) {
 }
 
 func (c *Client) UploadFile(ctx context.Context, file storage.File, content io.Reader) error {
-	//TODO implement me
-	panic("implement me")
+	if file.Name == "" {
+		return errors.New("yandex disk: file name is required")
+	}
+
+	if content == nil {
+		return errors.New("yandex disk: file content is required")
+	}
+
+	remotePath := filepath.ToSlash(filepath.Join("/", file.Name))
+
+	link, err := c.getUploadURL(ctx, remotePath, true)
+	if err != nil {
+		return fmt.Errorf("upload file %q: %w", file.Name, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, link.Href, content)
+	if err != nil {
+		return fmt.Errorf("create upload request for %q: %w", file.Name, err)
+	}
+
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	httpResp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("upload file %q: %w", file.Name, err)
+	}
+	defer httpResp.Body.Close()
+
+	switch httpResp.StatusCode {
+	case http.StatusCreated, http.StatusAccepted:
+		return nil
+	default:
+		return c.errorFromResponse(
+			fmt.Sprintf("upload file %q", file.Name),
+			httpResp,
+		)
+	}
+}
+
+func (c *Client) getUploadURL(ctx context.Context, path string, overwrite bool) (*uploadLinkResponse, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("yandex disk: upload path is required")
+	}
+
+	query := url.Values{}
+	query.Set("path", path)
+	query.Set("overwrite", strconv.FormatBool(overwrite))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uploadLinkURL+"?"+query.Encode(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create upload link request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "OAuth "+c.token)
+	req.Header.Set("Accept", "application/json")
+
+	httpResp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get upload link: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, c.errorFromResponse("get upload link", httpResp)
+	}
+
+	var result uploadLinkResponse
+	if err = json.NewDecoder(httpResp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode upload link response: %w", err)
+	}
+
+	if result.Href == "" {
+		return nil, errors.New("yandex disk: upload link is empty")
+	}
+
+	return &result, nil
+}
+
+func (c *Client) errorFromResponse(operation string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+
+	return fmt.Errorf(
+		"%s: unexpected status %d: %s",
+		operation,
+		resp.StatusCode,
+		strings.TrimSpace(string(body)),
+	)
 }
