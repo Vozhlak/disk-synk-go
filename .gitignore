@@ -46,4 +46,5 @@ go.work.sum
 #configs
 config.yaml
 
+#OAuth tokens
 *token.json
