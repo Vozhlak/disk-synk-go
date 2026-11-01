@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 const configPath = "config.yaml"
@@ -111,6 +113,8 @@ func main() {
 }
 
 func syncFiles(ctx context.Context, log *slog.Logger, cfg *config.Config, storages map[string]storage.Storage) {
+	syncStart := time.Now()
+
 	localFiles, err := storages["Local Filesystem"].ListFiles(ctx)
 	if err != nil {
 		log.Error(
@@ -127,10 +131,14 @@ func syncFiles(ctx context.Context, log *slog.Logger, cfg *config.Config, storag
 		slog.Int("count", len(localFiles)),
 	)
 
+	var wg sync.WaitGroup
+
 	for name, client := range storages {
 		if name == "Local Filesystem" {
 			continue
 		}
+
+		storageStart := time.Now()
 
 		log.Info(
 			"calculating diff...",
@@ -167,21 +175,54 @@ func syncFiles(ctx context.Context, log *slog.Logger, cfg *config.Config, storag
 				continue
 			}
 
-			if err = uploadFile(ctx, log, name, cfg.LocalDir, client, file); err != nil {
-				os.Exit(1)
-			}
+			wg.Add(1)
+
+			go func(
+				uploadCtx context.Context,
+				uploadLog *slog.Logger,
+				storageName,
+				localDir string,
+				uploadClient storage.Storage,
+				uploadFile storage.File,
+			) {
+				defer wg.Done()
+
+				if err := uploadOneFile(uploadCtx, uploadLog, storageName, localDir, uploadClient, uploadFile); err != nil {
+					uploadLog.Error(
+						"file upload failed",
+						slog.String("storage", storageName),
+						slog.String("file_name", uploadFile.Name),
+						slog.Any("error", err),
+					)
+				}
+			}(ctx, log, name, cfg.LocalDir, client, file)
 		}
+
+		log.Info(
+			"storage tasks scheduled",
+			slog.String("storage", name),
+			slog.Duration("duration", time.Since(storageStart)),
+		)
 	}
+
+	wg.Wait()
+
+	log.Info(
+		"file synchronization completed",
+		slog.Duration("duration", time.Since(syncStart)),
+	)
 }
 
-func uploadFile(
+func uploadOneFile(
 	ctx context.Context,
 	log *slog.Logger,
-	storageName string,
+	storageName,
 	localDir string,
 	client storage.Storage,
 	file storage.File,
 ) error {
+	startNow := time.Now()
+
 	log.Info(
 		"uploading file...",
 		slog.String("storage", storageName),
@@ -197,6 +238,7 @@ func uploadFile(
 			slog.String("storage", storageName),
 			slog.String("file_name", file.Name),
 			slog.String("path", localPath),
+			slog.Duration("duration", time.Since(startNow)),
 			slog.Any("error", err),
 		)
 
@@ -209,6 +251,7 @@ func uploadFile(
 			"failed to upload file",
 			slog.String("storage", storageName),
 			slog.String("file_name", file.Name),
+			slog.Duration("duration", time.Since(startNow)),
 			slog.Any("error", err),
 		)
 
@@ -219,6 +262,7 @@ func uploadFile(
 		"file uploaded successfully",
 		slog.String("storage", storageName),
 		slog.String("file_name", file.Name),
+		slog.Duration("duration", time.Since(startNow)),
 	)
 
 	return nil
